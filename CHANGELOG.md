@@ -10,3 +10,4 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 - Initial agentic loop CLI with durable checkpoints, retry/backoff, structured logging, and agent adapters.
 - Portable `loop-orchestrator` skill installer for Claude Code and Codex.
+- Homebrew formula and installation instructions for macOS and Linux.

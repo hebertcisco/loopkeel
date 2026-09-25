@@ -84,6 +84,19 @@ cargo install --path .
 
 The installed command is `loop` and the CLI also documents `$loop` as an alias. In agent slash-command/task configuration, invoke the external binary as `/loop` or `$loop` according to that tool's convention.
 
+### Homebrew
+
+Once the Homebrew tap is published, install the latest release on macOS or Linux with:
+
+```sh
+brew tap hebertcisco/loopkeel
+brew install loopkeel
+```
+
+Upgrade an existing installation with `brew update && brew upgrade loopkeel`. Remove it with `brew uninstall loopkeel`; remove the tap too with `brew untap hebertcisco/loopkeel` if you no longer need it.
+
+The formula builds `loopkeel` from its versioned release source and installs the `loop` executable.
+
 ## Usage
 
 ```sh
