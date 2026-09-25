@@ -1,0 +1,8 @@
+# Copy this file to .loop.toml in the project where the loop runs.
+max_iterations = 10
+timeout = 60
+retries = 3
+backoff_ms = 500
+buffer_limit = 64
+agent = "codex"
+# success_command = "cargo test"

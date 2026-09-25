@@ -1,0 +1,8 @@
+/target/
+.loop/
+.claude/
+.codex/
+.DS_Store
+*.swp
+*.tmp
+

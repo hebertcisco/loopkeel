@@ -1,0 +1,88 @@
+name: Build and release binaries
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing GitHub Release tag to upload to (for example, v0.1.0)
+        required: true
+        type: string
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            binary: loop
+          - target: x86_64-apple-darwin
+            os: macos-13
+            binary: loop
+          - target: aarch64-apple-darwin
+            os: macos-14
+            binary: loop
+          - target: x86_64-pc-windows-msvc
+            os: windows-2022
+            binary: loop.exe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --locked --release --target ${{ matrix.target }}
+      - name: Package Unix binary
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" dist/loop
+          tar -C dist -czf "loop-${{ matrix.target }}.tar.gz" loop
+      - name: Package Windows binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary }}" "dist/loop.exe"
+          Compress-Archive -Path dist/loop.exe -DestinationPath "loop-${{ matrix.target }}.zip" -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: loop-${{ matrix.target }}
+          path: |
+            loop-*.tar.gz
+            loop-*.zip
+          if-no-files-found: error
+
+  upload:
+    name: Upload release assets
+    needs: build
+    if: github.event_name == 'release' || inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: loop-*
+          merge-multiple: true
+      - name: Create checksums
+        run: sha256sum dist/* > dist/SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name || inputs.release_tag }}
+          files: dist/*
+          fail_on_unmatched_files: true
