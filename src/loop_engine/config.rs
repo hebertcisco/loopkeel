@@ -12,6 +12,7 @@ pub struct Config {
     pub backoff_ms: Option<u64>,
     pub buffer_limit: Option<usize>,
     pub agent: Option<String>,
+    pub stop_on_success: Option<bool>,
 }
 
 pub async fn read(root: &Path) -> Result<Config> {

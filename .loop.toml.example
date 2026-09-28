@@ -6,3 +6,6 @@ backoff_ms = 500
 buffer_limit = 64
 agent = "codex"
 # success_command = "cargo test"
+# Validation is progress by default; use this only when a passing command
+# should finish the loop immediately.
+stop_on_success = false

@@ -102,6 +102,7 @@ The formula builds `loopkeel` from its versioned release source and installs the
 ```sh
 loop start --goal "Implement and validate the feature" --max-iterations 8
 loop start --goal "Fix the bug" --success-command "cargo test" --retries 4
+loop start --goal "Fix the bug" --success-command "cargo test" --stop-on-success
 loop step
 loop status
 loop pause
@@ -138,7 +139,7 @@ For Cursor, configure an external task or hook to run `loop start ... --agent cu
 
 ## Stop criteria and resilience
 
-Loops stop at `max_iterations`, after `success_command` passes, after an explicit `complete` control command, or on `stop`/interrupt. Transient validation failures use exponential backoff (`backoff_ms * 2^attempt`) up to `retries`; a final failure is reported as a typed error. The async engine uses `tokio::select!` for Ctrl+C, control-file commands, and iteration timers. Events are appended to JSONL and are not retained as an in-memory history.
+Loops stop at `max_iterations`, after an explicit `complete` control command, or on `stop`/interrupt. A configured `success_command` validates each iteration but does not finish the loop by default; pass `--stop-on-success` (or set `stop_on_success = true`) when a passing validation should finish immediately. This avoids ending an agent run before its remaining execution/fix iterations. Transient validation failures use exponential backoff (`backoff_ms * 2^attempt`) up to `retries`; a final failure is reported as a typed error. Starting again after an interrupt resumes the saved checkpoint. The async engine uses `tokio::select!` for Ctrl+C, control-file commands, and iteration timers. Events are appended to JSONL and are not retained as an in-memory history.
 
 ## Development
 

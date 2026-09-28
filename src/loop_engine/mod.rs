@@ -38,6 +38,7 @@ pub struct EngineOptions {
     pub retries: Option<u32>,
     pub backoff_ms: Option<u64>,
     pub buffer_limit: Option<usize>,
+    pub stop_on_success: bool,
 }
 
 impl From<StartArgs> for EngineOptions {
@@ -51,6 +52,7 @@ impl From<StartArgs> for EngineOptions {
             retries: a.retries,
             backoff_ms: a.backoff_ms,
             buffer_limit: a.buffer_limit,
+            stop_on_success: a.stop_on_success,
         }
     }
 }
@@ -82,10 +84,16 @@ impl Engine {
         let retries = opts.retries.or(config.retries).unwrap_or(3);
         let backoff_ms = opts.backoff_ms.or(config.backoff_ms).unwrap_or(500);
         let buffer_limit = opts.buffer_limit.or(config.buffer_limit).unwrap_or(64);
+        let stop_on_success = opts.stop_on_success || config.stop_on_success.unwrap_or(false);
         let mut state = match persistence::load(&self.root).await {
             Ok(existing) if !matches!(existing.status, LoopStatus::Completed) => existing,
             _ => LoopState::new(opts.goal),
         };
+        if matches!(state.status, LoopStatus::Stopped | LoopStatus::Failed) {
+            state.status = LoopStatus::Running;
+            state.updated_at = now();
+            state.last_action = "resumed from checkpoint".into();
+        }
         persistence::save(&self.root, &state).await?;
         persistence::append_event(&self.root, &state, "started").await?;
         let (tx, mut rx) = mpsc::channel::<String>(8);
@@ -108,7 +116,7 @@ impl Engine {
                 signal = tokio::signal::ctrl_c() => { signal?; state.status = LoopStatus::Stopped; state.updated_at = now(); state.last_action = "interrupted; checkpoint saved".into(); persistence::save(&self.root, &state).await?; persistence::append_event(&self.root, &state, "stopped").await?; break; }
                 signal = terminate.recv() => { signal.ok_or(LoopError::NoCheckpoint)?; state.status = LoopStatus::Stopped; state.updated_at = now(); state.last_action = "terminated; checkpoint saved".into(); persistence::save(&self.root, &state).await?; persistence::append_event(&self.root, &state, "stopped").await?; break; }
                 Some(command) = rx.recv() => { match command.as_str() { "pause" => state.status = LoopStatus::Paused, "resume" => state.status = LoopStatus::Running, "stop" => state.status = LoopStatus::Stopped, "complete" => state.status = LoopStatus::Completed, _ => warn!(command = %command, "unknown control command") } state.updated_at = now(); persistence::save(&self.root, &state).await?; persistence::append_event(&self.root, &state, &command).await?; if !matches!(state.status, LoopStatus::Running | LoopStatus::Paused) { break; } }
-                _ = ticks.tick(), if state.status == LoopStatus::Running => { let passed = self.perform_step(&mut state, timeout, success_command.as_deref(), retries, backoff_ms, buffer_limit).await?; if stop_criteria::reached(&state, max_iterations, passed) { state.status = LoopStatus::Completed; persistence::save(&self.root, &state).await?; break; } }
+                _ = ticks.tick(), if state.status == LoopStatus::Running => { let passed = self.perform_step(&mut state, timeout, success_command.as_deref(), retries, backoff_ms, buffer_limit).await?; if stop_criteria::reached(&state, max_iterations, passed && stop_on_success) { state.status = LoopStatus::Completed; persistence::save(&self.root, &state).await?; break; } }
             }
         }
         watcher.abort();
@@ -212,11 +220,61 @@ mod tests {
             retries: None,
             backoff_ms: None,
             buffer_limit: Some(4),
+            stop_on_success: false,
         })
         .await
         .unwrap();
         let s = persistence::load(dir.path()).await.unwrap();
         assert_eq!(s.iteration, 1);
+        assert_eq!(s.status, LoopStatus::Completed);
+    }
+
+    #[tokio::test]
+    async fn validation_does_not_finish_work_budget_by_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let e = Engine::new(dir.path().into(), Agent::Codex, OutputFormat::Json).unwrap();
+        e.start(EngineOptions {
+            goal: "test".into(),
+            plan: None,
+            max_iterations: Some(2),
+            timeout: None,
+            success_command: Some("exit 0".into()),
+            retries: None,
+            backoff_ms: None,
+            buffer_limit: None,
+            stop_on_success: false,
+        })
+        .await
+        .unwrap();
+        let s = persistence::load(dir.path()).await.unwrap();
+        assert_eq!(s.iteration, 2);
+        assert_eq!(s.successes, 2);
+    }
+
+    #[tokio::test]
+    async fn stopped_checkpoint_is_resumed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut state = LoopState::new("test".into());
+        state.status = LoopStatus::Stopped;
+        state.iteration = 1;
+        persistence::save(dir.path(), &state).await.unwrap();
+
+        let e = Engine::new(dir.path().into(), Agent::Codex, OutputFormat::Json).unwrap();
+        e.start(EngineOptions {
+            goal: "ignored when checkpoint exists".into(),
+            plan: None,
+            max_iterations: Some(2),
+            timeout: None,
+            success_command: None,
+            retries: None,
+            backoff_ms: None,
+            buffer_limit: None,
+            stop_on_success: false,
+        })
+        .await
+        .unwrap();
+        let s = persistence::load(dir.path()).await.unwrap();
+        assert_eq!(s.iteration, 2);
         assert_eq!(s.status, LoopStatus::Completed);
     }
 }
