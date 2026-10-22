@@ -116,5 +116,7 @@ pub struct StartArgs {
     #[arg(long)]
     pub buffer_limit: Option<usize>,
     #[arg(long)]
+    pub iteration_interval_ms: Option<u64>,
+    #[arg(long)]
     pub stop_on_success: bool,
 }

@@ -112,6 +112,8 @@ loop stop
 
 The goal may also be loaded from a plan file with `--plan path/to/plan.md`. Configuration is read from `.loop.toml`; CLI values override it. Durable files are `.loop/state.json`, `.loop/events.jsonl`, and `.loop/control`. A checkpoint is atomically replaced after every iteration, so `Ctrl+C` leaves a resumable state.
 
+Iterations are spaced by 1 second by default so the loop does not exhaust its iteration budget before the host agent can act. Configure `iteration_interval_ms` in `.loop.toml` or pass `--iteration-interval-ms`; values below 1 millisecond are clamped to 1 millisecond for compatibility with the async timer.
+
 `--agent claude|codex|cursor` selects the adapter. Use `--output json` for structured agent ingestion, or `--output text` for humans. Logging supports `RUST_LOG=info` and `--log-format json`.
 
 ## Install the agent skill

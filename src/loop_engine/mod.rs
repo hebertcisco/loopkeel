@@ -38,6 +38,7 @@ pub struct EngineOptions {
     pub retries: Option<u32>,
     pub backoff_ms: Option<u64>,
     pub buffer_limit: Option<usize>,
+    pub iteration_interval_ms: Option<u64>,
     pub stop_on_success: bool,
 }
 
@@ -52,6 +53,7 @@ impl From<StartArgs> for EngineOptions {
             retries: a.retries,
             backoff_ms: a.backoff_ms,
             buffer_limit: a.buffer_limit,
+            iteration_interval_ms: a.iteration_interval_ms,
             stop_on_success: a.stop_on_success,
         }
     }
@@ -84,6 +86,11 @@ impl Engine {
         let retries = opts.retries.or(config.retries).unwrap_or(3);
         let backoff_ms = opts.backoff_ms.or(config.backoff_ms).unwrap_or(500);
         let buffer_limit = opts.buffer_limit.or(config.buffer_limit).unwrap_or(64);
+        let iteration_interval_ms = opts
+            .iteration_interval_ms
+            .or(config.iteration_interval_ms)
+            .unwrap_or(1_000)
+            .max(1);
         let stop_on_success = opts.stop_on_success || config.stop_on_success.unwrap_or(false);
         let mut state = match persistence::load(&self.root).await {
             Ok(existing) if !matches!(existing.status, LoopStatus::Completed) => existing,
@@ -108,7 +115,7 @@ impl Engine {
                 }
             }
         });
-        let mut ticks = time::interval(Duration::from_millis(10));
+        let mut ticks = time::interval(Duration::from_millis(iteration_interval_ms));
         let mut terminate =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
         loop {
@@ -220,6 +227,7 @@ mod tests {
             retries: None,
             backoff_ms: None,
             buffer_limit: Some(4),
+            iteration_interval_ms: Some(1),
             stop_on_success: false,
         })
         .await
@@ -242,6 +250,7 @@ mod tests {
             retries: None,
             backoff_ms: None,
             buffer_limit: None,
+            iteration_interval_ms: Some(1),
             stop_on_success: false,
         })
         .await
@@ -269,6 +278,7 @@ mod tests {
             retries: None,
             backoff_ms: None,
             buffer_limit: None,
+            iteration_interval_ms: Some(1),
             stop_on_success: false,
         })
         .await

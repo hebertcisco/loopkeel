@@ -11,6 +11,7 @@ pub struct Config {
     pub retries: Option<u32>,
     pub backoff_ms: Option<u64>,
     pub buffer_limit: Option<usize>,
+    pub iteration_interval_ms: Option<u64>,
     pub agent: Option<String>,
     pub stop_on_success: Option<bool>,
 }
