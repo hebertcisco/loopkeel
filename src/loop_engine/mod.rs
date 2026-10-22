@@ -155,7 +155,7 @@ impl Engine {
             );
             info!(message = %rendered, "iteration action");
             let passed = if let Some(command) = success_command {
-                match retry::command(command, retries, backoff_ms, timeout).await {
+                match retry::command(&self.root, command, retries, backoff_ms, timeout).await {
                     Ok(true) => {
                         state.successes += 1;
                         state.last_action = "success condition passed".into();
